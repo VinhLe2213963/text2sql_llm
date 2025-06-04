@@ -7,7 +7,7 @@ class Retriever:
         self.model = model
         self.device = next(model.parameters()).device
         self.all_questions = all_questions
-        self.question_embeddings = get_embedding(all_questions)
+        self.question_embeddings = self.get_embedding(all_questions)
 
     def get_embedding(texts):
         inputs = self.tokenizer(texts, return_tensors="pt", padding=True, truncation=True).to(self.device)
