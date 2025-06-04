@@ -120,7 +120,7 @@ def extract_sql_from_llm(llm_output: str) -> str:
     """
     Extract SQL code from a triple-quoted block like ```sql ... ```
     """
-    match = re.search(r"```(?:sql|sqlite)\s*(.*?)```", llm_output, re.DOTALL | re.IGNORECASE)
+    match = re.search(r"```(?:sqlite|sql)\s*(.*?)```", llm_output, re.DOTALL | re.IGNORECASE)
     if not match:
         raise ValueError("No valid SQL block found.")
     return match.group(1).strip()
