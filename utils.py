@@ -31,68 +31,79 @@ def get_table_schema(db_id, table_path):
             continue  # skip "*"
         col_display = col_name
         if idx in primary_keys:
-            col_display = f"{col_name}"  # bold primary keys if needed
+            col_display = f"{col_name} (PK)"  # bold primary keys if needed
         table_columns[table_idx].append(col_display)
 
-    table_schema = "### Sqlite SQL tables , with their properties:\n"
-    for i, table_name in enumerate(table_names):
-        cols = " , ".join(table_columns[i])
-        table_schema += f"{table_name} ( {cols} );\n"
+    table_schemas = {
+        table_names[i]: cols
+        for i, cols in table_columns.items()
+    }
 
-    foreign_key = "### Foreign key information of SQLite tables, used for table joins:\n"
-    for src_idx, tgt_idx in foreign_keys:
-        src_table_idx, src_col = column_names[src_idx]
-        tgt_table_idx, tgt_col = column_names[tgt_idx]
-        foreign_key += f"{table_names[src_table_idx]} ( {src_col} ) REFERENCES {table_names[tgt_table_idx]} ( {tgt_col} );\n"
-
-    return table_schema, foreign_key
-
-
-def get_cell_value_reference(db_id, table_path, db_path, top_k=3):
-    with open(table_path, "r") as f:
-        tables = json.load(f)
-
-    found_schema = None
-    for schema in tables:
-        if schema['db_id'] == db_id:
-            found_schema = schema
-            break
-
-    if not found_schema:
-        raise ValueError(f"Schema not found for the given db_id: {db_id} in table_path: {table_path}")
+    foreign_key_pairs = []
+    for from_idx, to_idx in foreign_keys:
+        from_table_idx, from_col_name = column_names[from_idx]
+        to_table_idx, to_col_name = column_names[to_idx]
+        from_table = table_names[from_table_idx]
+        to_table = table_names[to_table_idx]
+        foreign_key_pairs.append(
+            (f"{from_table}.{from_col_name}", f"{to_table}.{to_col_name}")
+        )
     
+    return table_schemas, foreign_key_pairs
+
+def filter_foreign_keys(table_schemas, foreign_key_pairs):
+    valid_tables = set(table_schemas.keys())
+
+    filtered_fks = []
+    for from_col, to_col in foreign_key_pairs:
+        from_table = from_col.split('.')[0]
+        to_table = to_col.split('.')[0]
+        if from_table in valid_tables and to_table in valid_tables:
+            filtered_fks.append((from_col, to_col))
+
+    return filtered_fks
+
+def generate_table_schema_prompt(table_schemas):
+    lines = ["### Sqlite SQL tables , with their properties:"]
+    for table in sorted(table_schemas.keys()):
+        columns = " , ".join(table_schemas[table])
+        lines.append(f"{table} ( {columns} );")
+    return "\n".join(lines)
+
+def generate_foreign_key_prompt(foreign_key_pairs):
+    lines = ["### Foreign key information of SQLite tables, used for table joins:"]
+    for from_col, to_col in foreign_key_pairs:
+        from_table, from_column = from_col.split(".")
+        to_table, to_column = to_col.split(".")
+        line = f"{from_table} ( {from_column} ) REFERENCES {to_table} ( {to_column} );"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def generate_cell_value_reference(db_id, table_schemas, db_path, k=3):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    cell_value_reference = "### Here are some data information about database references.\n"
+    lines = [f"### Here are some data information about database references."]
 
-    for table in found_schema["table_names_original"]:
-        try:
-            # Get column names
-            cursor.execute(f"PRAGMA table_info('{table}')")
-            columns = [row[1] for row in cursor.fetchall()]
+    for table, columns in sorted(table_schemas.items()):
+        values_line = []
+        for col in columns:
+            try:
+                cursor.execute(f"SELECT DISTINCT `{col}` FROM `{table}` WHERE `{col}` IS NOT NULL LIMIT 100;")
+                results = [row[0] for row in cursor.fetchall()]
+                sampled = random.sample(results, min(k, len(results)))
+                # Convert all values to string and format them nicely
+                sampled_strs = [str(val) for val in sampled]
+                values_line.append(f"{col} [{', '.join(sampled_strs)}]")
+            except Exception as e:
+                # In case of any SQL errors, skip the column
+                values_line.append(f"{col} []")
 
-            # Collect distinct values per column
-            col_entries = []
-            for col in columns:
-                try:
-                    cursor.execute(f'SELECT DISTINCT "{col}" FROM "{table}" WHERE "{col}" IS NOT NULL LIMIT {top_k}')
-                    values = [str(row[0]) for row in cursor.fetchall()]
-                    formatted_values = ', '.join(values)
-                    col_entries.append(f"{col} [{formatted_values}]")
-                except Exception as e:
-                    col_entries.append(f"{col} [error]")
-                    print(f"Error retrieving column '{col}' from table '{table}': {e}")
-
-            # Format output
-            output = f"{table} ( " + ' , '.join(col_entries) + " );\n"
-            cell_value_reference += output
-
-        except Exception as e:
-            print(f"Error reading table '{table}': {e}")
+        lines.append(f"{table} ( " + " , ".join(values_line) + " );")
 
     conn.close()
-    return cell_value_reference
+    return "\n".join(lines)
 
 
 def format_fewshot_examples(fewshot_examples):
