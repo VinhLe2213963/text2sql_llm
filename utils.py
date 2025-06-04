@@ -31,7 +31,7 @@ def get_table_schema(db_id, table_path):
             continue  # skip "*"
         col_display = col_name
         if idx in primary_keys:
-            col_display = f"{col_name}"  # bold primary keys if needed
+            col_display = f"{col_name}" 
         table_columns[table_idx].append(col_display)
 
     table_schemas = {
