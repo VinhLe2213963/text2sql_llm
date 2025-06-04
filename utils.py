@@ -123,7 +123,10 @@ def generate_prompt(question, formatted_fewshot_examples, table_schemas_prompt, 
 
 ### Answer the question by SQLite SQL query only and with no
 explanation. You must minimize SQL execution time while ensuring
-correctness.
+correctness. Return the SQL in the format:
+```sql
+...
+```
 
 {table_schemas_prompt}
 
