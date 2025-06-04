@@ -18,7 +18,7 @@ class Retriever:
     def get_examples(self, question, k=5):
         question_embeddings = self.get_embedding(self.all_questions)
         question_embedding = self.get_embedding([question])
-        similarities = torch.matmul(question_embedding, self.question_embeddings.T).squeeze(0)
+        similarities = torch.matmul(question_embedding, question_embeddings.T).squeeze(0)
         topk_indices = similarities.topk(k).indices.tolist()
         return [self.all_questions[i] for i in topk_indices]
 
