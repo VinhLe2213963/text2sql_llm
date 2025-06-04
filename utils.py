@@ -116,6 +116,27 @@ def format_fewshot_examples(fewshot_examples):
 
     return '\n'.join(lines)
 
+def generate_prompt(question, formatted_fewshot_examples, table_schemas_prompt, foreign_key_prompt, cv_ref):
+    prompt = f"""
+### Examples: 
+{formatted_fewshot_examples}
+
+### Answer the question by SQLite SQL query only and with no
+explanation. You must minimize SQL execution time while ensuring
+correctness.
+
+{table_schemas_prompt}
+
+{foreign_key_prompt}
+
+{cv_ref}
+
+### Question: {question}
+
+### SQL: 
+"""
+    return prompt
+
 def extract_sql_from_llm(llm_output: str) -> str:
     """
     Extract SQL code from a triple-quoted block like ```sql ... ```
