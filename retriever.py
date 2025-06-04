@@ -6,7 +6,7 @@ class Contriever:
     def __init__(self, all_questions):
         self.tokenizer = AutoTokenizer.from_pretrained("facebook/contriever")
         self.model = AutoModel.from_pretrained("facebook/contriever").eval().to("cuda" if torch.cuda.is_available() else "cpu")
-        self.device = next(model.parameters()).device
+        self.device = next(self.model.parameters()).device
         self.all_questions = all_questions
         self.question_embeddings = get_embedding(all_questions)
 
