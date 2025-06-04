@@ -7,7 +7,6 @@ class Retriever:
         self.model = model
         self.device = next(model.parameters()).device
         self.all_questions = all_questions
-        self.question_embeddings = self.get_embedding(all_questions)
 
     def get_embedding(self, texts):
         inputs = self.tokenizer(texts, return_tensors="pt", padding=True, truncation=True).to(self.device)
@@ -17,6 +16,7 @@ class Retriever:
         return F.normalize(cls_embeddings, p=2, dim=1)
 
     def get_examples(self, question, k=5):
+        question_embeddings = self.get_embedding(self.all_questions)
         question_embedding = self.get_embedding([question])
         similarities = torch.matmul(question_embedding, self.question_embeddings.T).squeeze(0)
         topk_indices = similarities.topk(k).indices.tolist()
