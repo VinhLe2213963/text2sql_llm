@@ -6,6 +6,7 @@ from utils import extract_sql_from_llm
 
 class Gemini:
     def __init__(self, model_name, api):
+        self.model = model_name
         self.client = genai.Client(
             api_key=api,
         )
@@ -28,7 +29,7 @@ class Gemini:
         response = ""
         
         for chunk in self.client.models.generate_content_stream(
-            model=model,
+            model=self.model,
             contents=contents,
             config=generate_content_config,
         ):
