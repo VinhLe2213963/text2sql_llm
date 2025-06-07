@@ -172,3 +172,35 @@ def majority_vote(rankings):
     tied = [list(r) for r, freq in count.items() if freq == max_freq]
     
     return random.choice(tied)
+
+def estimate_sql_difficulty(sql_query: str) -> str:
+    query = sql_query.upper()
+    score = 0
+
+    if "JOIN" in query:
+        score += 1
+    if "GROUP BY" in query:
+        score += 1
+    if "HAVING" in query:
+        score += 1
+    if "UNION" in query or "INTERSECT" in query or "EXCEPT" in query:
+        score += 2
+    if "SELECT" in query and "FROM (SELECT" in query:
+        score += 1
+    if query.count("SELECT") > 1:
+        score += 1
+    if query.count("JOIN") > 1:
+        score += 1
+    if query.count("WHERE") > 1:
+        score += 1
+    if "ORDER BY" in query or "LIMIT" in query:
+        score += 0.5
+
+    if score <= 1:
+        return "easy"
+    elif score <= 3:
+        return "medium"
+    elif score <= 5:
+        return "hard"
+    else:
+        return "extra"
