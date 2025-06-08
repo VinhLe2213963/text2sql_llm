@@ -3,6 +3,7 @@ import os
 from google import genai
 from google.genai import types
 from openai import OpenAI
+from mistralai import Mistral, UserMessage, SystemMessage
 from utils import extract_sql_from_llm
 
 class Gemini:
@@ -64,4 +65,22 @@ class GPT:
             model=self.model
         )
 
+        return extract_sql_from_llm(response.choices[0].message.content)
+
+class Mistral:
+    def __init__(self, model, endpoint, api):
+        self.model = model
+        self.client = Mistral(api_key=api, server_url=endpoint)
+
+    def generate(self, prompt, temperature):
+        response = self.client.chat.complete(
+            model=self.model,
+            messages=[
+                SystemMessage(content="You are a helpful assistant."),
+                UserMessage(content=prompt),
+            ],
+            temperature=temperature,
+            max_tokens=1000,
+            top_p=1.0
+        )
         return extract_sql_from_llm(response.choices[0].message.content)
