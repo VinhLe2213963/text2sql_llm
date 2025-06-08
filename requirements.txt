@@ -4,3 +4,4 @@ google-genai
 mistralai>=1.0.0
 openai
 pandas
+transformers
