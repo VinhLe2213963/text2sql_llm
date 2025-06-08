@@ -67,7 +67,7 @@ class GPT:
 
         return extract_sql_from_llm(response.choices[0].message.content)
 
-class Mistral:
+class MistralAI:
     def __init__(self, model, endpoint, api):
         self.model = model
         self.client = Mistral(api_key=api, server_url=endpoint)
