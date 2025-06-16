@@ -4,6 +4,9 @@ import pandas as pd
 import re
 from collections import Counter
 import random
+import time
+from sql_metadata import Parser
+from tabulate import tabulate
 
 def get_table_schema(db_id, table_path):
     with open(table_path, "r") as f:
@@ -150,17 +153,28 @@ def extract_sql_from_llm(llm_output: str) -> str:
     return match.group(1).strip()
 
 
-def compute_execution_accuracy(llm_sql, gold_sql, db_path):
+def compute_execution_accuracy(llm_sql_list, gold_sql, db_path):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    llm_res = cursor.execute(llm_sql)
-    llm_res = cursor.fetchall()
+    # llm_res = cursor.execute(llm_sql)
+    # llm_res = cursor.fetchall()
+
+    llm_res = []
+
+    for llm_sql in llm_sql_list:
+      try:
+        res = cursor.execute(llm_sql)
+        res = cursor.fetchall()
+        llm_res.append(res)
+      except Exception as e:
+        print(e)
+        continue
 
     gold_res = cursor.execute(gold_sql)
     gold_res = cursor.fetchall()
 
-    return llm_res == gold_res
+    return sorted(majority_vote(llm_res)) == sorted(gold_res)
 
 
 def majority_vote(rankings):
@@ -204,3 +218,96 @@ def estimate_sql_difficulty(sql_query: str) -> str:
         return "hard"
     else:
         return "extra"
+
+def generate_vn_error(sql_error_list):
+    prompt = "###  Đây là những câu trả lời trước của bạn và lỗi của những câu trả lời đó\n"
+    for sql, error in sql_error_list:
+        prompt += f"# SQL: {sql}\n"
+        prompt += f"# Lỗi: {error}\n"
+    return prompt
+
+def generate_vn_prompt(question, formatted_fewshot_examples, table_schemas_prompt, foreign_key_prompt, cv_ref, error=""):
+    prompt = f"""
+### Một vài ví dụ:
+{formatted_fewshot_examples}
+
+### Hãy trả lời câu hỏi chỉ bằng câu truy vấn SQLite mà không cần giải thích.
+Hãy cố gắng giảm thiểu thời gian thực thi của SQL mà vẫn phải đảm bảo tính đúng đắn.
+Hãy trả về câu truy vấn SQL dưới dạng như sau:
+```sql
+...
+```
+
+{table_schemas_prompt}
+
+{foreign_key_prompt}
+
+{cv_ref}
+
+{error}
+
+### Câu hỏi: {question}
+
+### SQL:
+"""
+    return prompt
+
+
+def generate_vn_table_schema_prompt(table_schemas):
+    lines = ["### Đây là bảng SQLite với các tính chất của nó:"]
+    for table in sorted(table_schemas.keys()):
+        columns = " , ".join(table_schemas[table])
+        lines.append(f"{table} ( {columns} );")
+    return "\n".join(lines)
+
+def generate_vn_foreign_key_prompt(foreign_key_pairs):
+    lines = ["### Đây là thông tin về khóa ngoại của các bảng, dùng cho các phép join:"]
+    for from_col, to_col in foreign_key_pairs:
+        from_table, from_column = from_col.split(".")
+        to_table, to_column = to_col.split(".")
+        line = f"{from_table} ( {from_column} ) REFERENCES {to_table} ( {to_column} );"
+        lines.append(line)
+    return "\n".join(lines)
+
+def generate_vn_cell_value_reference(db_id, table_schemas, db_path, k=3):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    lines = [f"### Đây là một số giá trị tham khảo của các hàng của bảng."]
+
+    for table, columns in sorted(table_schemas.items()):
+        values_line = []
+        for col in columns:
+            try:
+                cursor.execute(f"SELECT DISTINCT `{col}` FROM `{table}` WHERE `{col}` IS NOT NULL LIMIT 100;")
+                results = [row[0] for row in cursor.fetchall()]
+                sampled = random.sample(results, min(k, len(results)))
+                # Convert all values to string and format them nicely
+                sampled_strs = [str(val) for val in sampled]
+                values_line.append(f"{col} [{', '.join(sampled_strs)}]")
+            except Exception as e:
+                # In case of any SQL errors, skip the column
+                values_line.append(f"{col} []")
+
+        lines.append(f"{table} ( " + " , ".join(values_line) + " );")
+
+    conn.close()
+    return "\n".join(lines)
+
+def generate_vn_table_schema_prompt(table_schemas):
+    lines = ["### Đây là bảng SQLite với các tính chất của nó:"]
+    for table in sorted(table_schemas.keys()):
+        columns = " , ".join(table_schemas[table])
+        lines.append(f"{table} ( {columns} );")
+    return "\n".join(lines)
+
+def process_response(input_string: str) -> str:
+    """
+    Trích xuất đoạn mã Python nằm giữa cặp ```python và ```
+    """
+    pattern = r"```python(.*?)```"
+    match = re.search(pattern, input_string, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    else:
+        return "Không tìm thấy đoạn mã Python."
